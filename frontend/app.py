@@ -413,88 +413,88 @@ with tab_inspect:
                     applied_mode = data.get("strictness_mode", "STANDARD")
                     applied_desc = data.get("strictness_description", "")
 
-                        # Top Telemetry Cards
-                        m_col1, m_col2, m_col3 = st.columns(3)
-                        with m_col1:
-                            if "CONTRADICT" in category:
-                                d_str = f"❌ {category}"
-                                d_color = "inverse"
-                            elif "ENTAIL" in category:
-                                d_str = f"✅ {category}"
-                                d_color = "normal"
-                            else:
-                                d_str = f"⚠️ {category}"
-                                d_color = "off"
-
-                            st.metric(
-                                label="Entailment Score",
-                                value=f"{score * 100:.1f}%",
-                                delta=d_str,
-                                delta_color=d_color
-                            )
-                        with m_col2:
-                            st.metric(
-                                label="Pipeline Status",
-                                value=status,
-                                delta="🛡️ Auto-Healed" if data.get("corrected") else "✅ Approved",
-                                delta_color="normal" if not data.get("corrected") else "off"
-                            )
-                        with m_col3:
-                            lat_display = int(latency) if latency >= 1.0 else 420
-                            st.metric(
-                                label="Audit Latency",
-                                value=f"{lat_display} ms"
-                            )
-
-                        # Progress Bar indicator with threshold marker
-                        st.write(f"**Entailment Confidence Meter (Cutoff: {strictness_cutoff*100:.0f}%):**")
-                        bar_val = min(1.0, max(0.0, score))
-                        st.progress(bar_val)
-                        st.caption(f"🛡️ Active Profile: **{applied_desc}**")
-
-                        st.markdown("---")
-                        # ================= FEATURE 1: TOKEN-LEVEL VISUAL DIFF =================
-                        st.markdown("### 🌟 Token-Level Visual Saliency Diff")
-                        if diff_data.get("html_diff"):
-                            st.markdown(diff_data["html_diff"], unsafe_allow_html=True)
+                    # Top Telemetry Cards
+                    m_col1, m_col2, m_col3 = st.columns(3)
+                    with m_col1:
+                        if "CONTRADICT" in category:
+                            d_str = f"❌ {category}"
+                            d_color = "inverse"
+                        elif "ENTAIL" in category:
+                            d_str = f"✅ {category}"
+                            d_color = "normal"
                         else:
-                            if score < strictness_cutoff:
-                                st.error(f"🚨 Hallucination Detected: {verdict.get('hallucinated_part')}")
-                                st.warning(f"**Rejected Draft:** {data['initial_draft']}")
-                                st.success(f"**Healed Output:** {data['final_output']}")
-                            else:
-                                st.success(f"✅ Fully Grounded: {data['final_output']}")
+                            d_str = f"⚠️ {category}"
+                            d_color = "off"
 
-                        st.markdown("---")
-                        # ================= FEATURE 2: EU AI ACT COMPLIANCE CERTIFICATE =================
-                        if cert_data:
-                            st.markdown("### 📜 Cryptographic EU AI Act Compliance Certificate")
-                            with st.container():
-                                st.markdown(f"""
-                                <div class="cert-box">
-                                    <div class="cert-seal">🛡️ Certified EU AI Act Article 14 & 15 Compliant</div>
-                                    <div class="cert-title">Compliance Serial: {cert_data.get('certificate_id')}</div>
-                                    <div class="cert-sub">Issued: {cert_data.get('issued_at')} | Standard: {cert_data.get('regulatory_framework')}</div>
-                                    <p style="font-size: 0.9rem; margin-bottom: 8px;"><b>Status:</b> <span style="color: #0369A1; font-weight:700;">{cert_data.get('compliance_status')}</span> | <b>Certified Entailment:</b> {cert_data.get('entailment_score') * 100:.1f}% ({cert_data.get('verdict')})</p>
-                                    <p style="font-size: 0.85rem; margin-bottom: 4px;"><b>Premise SHA-256 Digest:</b> <span class="hash-chip">{cert_data.get('premise_sha256')[:32]}...</span></p>
-                                    <p style="font-size: 0.85rem; margin-bottom: 4px;"><b>Output SHA-256 Digest:</b> <span class="hash-chip">{cert_data.get('final_output_sha256')[:32]}...</span></p>
-                                    <p style="font-size: 0.85rem; margin-bottom: 8px;"><b>HMAC Digital Seal:</b> <span class="hash-chip">{cert_data.get('digital_signature')[:32]}...</span></p>
-                                </div>
-                                """, unsafe_allow_html=True)
+                        st.metric(
+                            label="Entailment Score",
+                            value=f"{score * 100:.1f}%",
+                            delta=d_str,
+                            delta_color=d_color
+                        )
+                    with m_col2:
+                        st.metric(
+                            label="Pipeline Status",
+                            value=status,
+                            delta="🛡️ Auto-Healed" if data.get("corrected") else "✅ Approved",
+                            delta_color="normal" if not data.get("corrected") else "off"
+                        )
+                    with m_col3:
+                        lat_display = int(latency) if latency >= 1.0 else 420
+                        st.metric(
+                            label="Audit Latency",
+                            value=f"{lat_display} ms"
+                        )
 
-                                # 1-Click Download Button
-                                cert_json_str = json.dumps(cert_data, indent=2)
-                                st.download_button(
-                                    label="⬇️ Download Official Compliance Certificate (JSON)",
-                                    data=cert_json_str,
-                                    file_name=f"{cert_data.get('certificate_id', 'compliance_certificate')}.json",
-                                    mime="application/json",
-                                    use_container_width=True
-                                )
+                    # Progress Bar indicator with threshold marker
+                    st.write(f"**Entailment Confidence Meter (Cutoff: {strictness_cutoff*100:.0f}%):**")
+                    bar_val = min(1.0, max(0.0, score))
+                    st.progress(bar_val)
+                    st.caption(f"🛡️ Active Profile: **{applied_desc}**")
 
-                        # Raw Telemetry Expander
-                        with st.expander("🔍 Inspect Full Audit Telemetry Payload", expanded=False):
-                            st.json(data)
+                    st.markdown("---")
+                    # ================= FEATURE 1: TOKEN-LEVEL VISUAL DIFF =================
+                    st.markdown("### 🌟 Token-Level Visual Saliency Diff")
+                    if diff_data.get("html_diff"):
+                        st.markdown(diff_data["html_diff"], unsafe_allow_html=True)
+                    else:
+                        if score < strictness_cutoff:
+                            st.error(f"🚨 Hallucination Detected: {verdict.get('hallucinated_part')}")
+                            st.warning(f"**Rejected Draft:** {data['initial_draft']}")
+                            st.success(f"**Healed Output:** {data['final_output']}")
+                        else:
+                            st.success(f"✅ Fully Grounded: {data['final_output']}")
+
+                    st.markdown("---")
+                    # ================= FEATURE 2: EU AI ACT COMPLIANCE CERTIFICATE =================
+                    if cert_data:
+                        st.markdown("### 📜 Cryptographic EU AI Act Compliance Certificate")
+                        with st.container():
+                            st.markdown(f"""
+                            <div class="cert-box">
+                                <div class="cert-seal">🛡️ Certified EU AI Act Article 14 & 15 Compliant</div>
+                                <div class="cert-title">Compliance Serial: {cert_data.get('certificate_id')}</div>
+                                <div class="cert-sub">Issued: {cert_data.get('issued_at')} | Standard: {cert_data.get('regulatory_framework')}</div>
+                                <p style="font-size: 0.9rem; margin-bottom: 8px;"><b>Status:</b> <span style="color: #0369A1; font-weight:700;">{cert_data.get('compliance_status')}</span> | <b>Certified Entailment:</b> {cert_data.get('entailment_score') * 100:.1f}% ({cert_data.get('verdict')})</p>
+                                <p style="font-size: 0.85rem; margin-bottom: 4px;"><b>Premise SHA-256 Digest:</b> <span class="hash-chip">{cert_data.get('premise_sha256')[:32]}...</span></p>
+                                <p style="font-size: 0.85rem; margin-bottom: 4px;"><b>Output SHA-256 Digest:</b> <span class="hash-chip">{cert_data.get('final_output_sha256')[:32]}...</span></p>
+                                <p style="font-size: 0.85rem; margin-bottom: 8px;"><b>HMAC Digital Seal:</b> <span class="hash-chip">{cert_data.get('digital_signature')[:32]}...</span></p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                            # 1-Click Download Button
+                            cert_json_str = json.dumps(cert_data, indent=2)
+                            st.download_button(
+                                label="⬇️ Download Official Compliance Certificate (JSON)",
+                                data=cert_json_str,
+                                file_name=f"{cert_data.get('certificate_id', 'compliance_certificate')}.json",
+                                mime="application/json",
+                                use_container_width=True
+                            )
+
+                    # Raw Telemetry Expander
+                    with st.expander("🔍 Inspect Full Audit Telemetry Payload", expanded=False):
+                        st.json(data)
                             
                 except httpx.ConnectError:
                     st.error(f"Could not connect to FastAPI backend at `{backend_url}`. Please verify backend is running.")
@@ -588,31 +588,29 @@ with tab_benchmark:
                 with b_col4:
                     st.metric("Avg Latency", f"{b_data['average_latency_ms']:.1f} ms")
 
-                    st.markdown("---")
-                    st.markdown("### 📋 Case-by-Case Benchmark Audit Results")
+                st.markdown("---")
+                st.markdown("### 📋 Case-by-Case Benchmark Audit Results")
 
-                    for item in b_data["results"]:
-                        with st.container():
-                            is_passed = item["passed"]
-                            icon = "✅" if is_passed else "❌"
-                            
-                            with st.expander(f"{icon} **[{item['id']}] {item['title']}** — {item['category']} (Status: {item['status']})", expanded=not is_passed):
-                                c1, c2 = st.columns(2)
-                                with c1:
-                                    st.markdown(f"**Query:** {item['question']}")
-                                    st.markdown(f"**NLI Verdict:** `{item['initial_verdict']}` (Score: `{item['initial_score']:.2f}`)")
-                                    if item["hallucinated_part"] != "None":
-                                        st.markdown(f"**Flagged Part:** :red[{item['hallucinated_part']}]")
-                                    if item.get("certificate_id"):
-                                        st.markdown(f"**Compliance ID:** `{item['certificate_id']}`")
-                                    st.markdown(f"**Latency:** `{item['latency_ms']} ms`")
-                                with c2:
-                                    st.markdown("**Initial Draft (Unshielded):**")
-                                    st.caption(item["initial_draft"])
-                                    st.markdown("**Final Guarded Output:**")
-                                    st.info(item["final_output"])
-                else:
-                    st.error(f"Benchmark error {batch_res.status_code}: {batch_res.text}")
+                for item in b_data["results"]:
+                    with st.container():
+                        is_passed = item["passed"]
+                        icon = "✅" if is_passed else "❌"
+                        
+                        with st.expander(f"{icon} **[{item['id']}] {item['title']}** — {item['category']} (Status: {item['status']})", expanded=not is_passed):
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                st.markdown(f"**Query:** {item['question']}")
+                                st.markdown(f"**NLI Verdict:** `{item['initial_verdict']}` (Score: `{item['initial_score']:.2f}`)")
+                                if item["hallucinated_part"] != "None":
+                                    st.markdown(f"**Flagged Part:** :red[{item['hallucinated_part']}]")
+                                if item.get("certificate_id"):
+                                    st.markdown(f"**Compliance ID:** `{item['certificate_id']}`")
+                                st.markdown(f"**Latency:** `{item['latency_ms']} ms`")
+                            with c2:
+                                st.markdown("**Initial Draft (Unshielded):**")
+                                st.caption(item["initial_draft"])
+                                st.markdown("**Final Guarded Output:**")
+                                st.info(item["final_output"])
             except Exception as e:
                 st.error(f"Failed to run benchmark suite: {str(e)}")
 
