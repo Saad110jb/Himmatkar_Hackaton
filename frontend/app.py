@@ -1,7 +1,66 @@
 import os
+import sys
+import asyncio
+from pathlib import Path
 import streamlit as st
 import httpx
 import json
+
+# Ensure project root is in sys.path for direct in-process execution on Streamlit Community Cloud
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from backend.guardrail import run_rag_guardrail_pipeline
+from backend.schemas import AuditRequest
+from backend.scenarios import ADVERSARIAL_ATTACK_SUITE
+from backend.main import run_batch_benchmark
+
+
+def dispatch_audit(payload: dict, backend_url: str) -> dict:
+    """Execute audit via FastAPI backend if reachable; fall back seamlessly to in-process pipeline."""
+    try:
+        res = httpx.post(f"{backend_url}/api/audit", json=payload, timeout=40.0)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        pass
+    
+    # Direct in-process execution (Streamlit Community Cloud mode)
+    req = AuditRequest(**payload)
+    result = asyncio.run(run_rag_guardrail_pipeline(req))
+    return result.model_dump()
+
+
+def dispatch_adversarial_cases(backend_url: str) -> list:
+    """Retrieve adversarial cases via API or directly from suite."""
+    try:
+        adv_res = httpx.get(f"{backend_url}/api/adversarial-cases", timeout=3.0)
+        if adv_res.status_code == 200:
+            return adv_res.json()
+    except Exception:
+        pass
+    return [c.model_dump() for c in ADVERSARIAL_ATTACK_SUITE]
+
+
+def dispatch_batch_test(api_key: str, strictness_cutoff: float, backend_url: str) -> dict:
+    """Execute 10-query benchmark via API or directly in-process."""
+    try:
+        batch_res = httpx.get(
+            f"{backend_url}/api/batch-test",
+            params={
+                "api_key": api_key if api_key else None,
+                "strictness_cutoff": strictness_cutoff
+            },
+            timeout=90.0
+        )
+        if batch_res.status_code == 200:
+            return batch_res.json()
+    except Exception:
+        pass
+    res = asyncio.run(run_batch_benchmark(api_key=api_key or None, strictness_cutoff=strictness_cutoff))
+    return res.model_dump()
+
 
 # Page configuration
 st.set_page_config(
@@ -100,14 +159,16 @@ with st.sidebar:
     # Check backend connectivity
     backend_connected = False
     try:
-        health_res = httpx.get(f"{backend_url}/health", timeout=2.0)
+        health_res = httpx.get(f"{backend_url}/health", timeout=1.5)
         if health_res.status_code == 200:
-            st.success("🟢 Backend Connected (v1.1)", icon="✅")
+            st.success("🟢 FastAPI Backend Connected (REST API)", icon="✅")
             backend_connected = True
         else:
-            st.warning("🟡 Backend Returned Non-200")
+            st.info("☁️ Streamlit Cloud Active (In-Process Guardrail)", icon="🚀")
+            backend_connected = True
     except Exception:
-        st.error("🔴 Backend Offline / Unreachable")
+        st.info("☁️ Streamlit Cloud Active (In-Process Guardrail)", icon="🚀")
+        backend_connected = True
 
     st.markdown("---")
     # ================= FEATURE 5: DYNAMIC STRICTNESS PRESETS =================
@@ -341,21 +402,16 @@ with tab_inspect:
 
             with st.spinner("Executing Generator ➔ NLI Critic ➔ Self-Healing Loop ➔ Token Diff..."):
                 try:
-                    res = httpx.post(f"{backend_url}/api/audit", json=payload, timeout=40.0)
-                    
-                    if res.status_code != 200:
-                        st.error(f"Backend returned error {res.status_code}: {res.text}")
-                    else:
-                        data = res.json()
-                        verdict = data["critic_verdict"]
-                        score = float(verdict.get("entailment_score", 0.0))
-                        category = verdict.get("verdict", "UNKNOWN")
-                        status = data.get("status", "CLEAN")
-                        latency = data.get("latency_ms", 0.0)
-                        diff_data = data.get("visual_diff") or {}
-                        cert_data = data.get("compliance_certificate") or {}
-                        applied_mode = data.get("strictness_mode", "STANDARD")
-                        applied_desc = data.get("strictness_description", "")
+                    data = dispatch_audit(payload, backend_url)
+                    verdict = data["critic_verdict"]
+                    score = float(verdict.get("entailment_score", 0.0))
+                    category = verdict.get("verdict", "UNKNOWN")
+                    status = data.get("status", "CLEAN")
+                    latency = data.get("latency_ms", 0.0)
+                    diff_data = data.get("visual_diff") or {}
+                    cert_data = data.get("compliance_certificate") or {}
+                    applied_mode = data.get("strictness_mode", "STANDARD")
+                    applied_desc = data.get("strictness_description", "")
 
                         # Top Telemetry Cards
                         m_col1, m_col2, m_col3 = st.columns(3)
@@ -453,8 +509,7 @@ with tab_redteam:
     st.markdown("Evaluate how the closed-loop NLI guardrail neutralizes sophisticated prompt injection, context poisoning, and hallucination-bait attacks.")
 
     try:
-        adv_res = httpx.get(f"{backend_url}/api/adversarial-cases", timeout=5.0)
-        attack_cases = adv_res.json() if adv_res.status_code == 200 else []
+        attack_cases = dispatch_adversarial_cases(backend_url)
     except Exception:
         attack_cases = []
 
@@ -492,21 +547,17 @@ with tab_redteam:
                             "temperature": 0.1,
                             "strictness_cutoff": strictness_cutoff
                         }
-                        atk_res = httpx.post(f"{backend_url}/api/audit", json=atk_payload, timeout=30.0)
-                        if atk_res.status_code == 200:
-                            atk_data = atk_res.json()
-                            atk_verdict = atk_data["critic_verdict"]
+                        atk_data = dispatch_audit(atk_payload, backend_url)
+                        atk_verdict = atk_data["critic_verdict"]
 
-                            st.error(f"🚨 **Attack Detected & Neutralized!** NLI Score: `{atk_verdict['entailment_score']:.2f}` ({atk_verdict['verdict']})")
-                            st.markdown(f"**Excised Injection Claim:** :red[{atk_verdict['hallucinated_part']}]")
-                            
-                            st.markdown("**Raw Vulnerable Generator Response (Blocked):**")
-                            st.warning(atk_data["initial_draft"])
+                        st.error(f"🚨 **Attack Detected & Neutralized!** NLI Score: `{atk_verdict['entailment_score']:.2f}` ({atk_verdict['verdict']})")
+                        st.markdown(f"**Excised Injection Claim:** :red[{atk_verdict['hallucinated_part']}]")
+                        
+                        st.markdown("**Raw Vulnerable Generator Response (Blocked):**")
+                        st.warning(atk_data["initial_draft"])
 
-                            st.markdown("**Shielded Production Output (Delivered):**")
-                            st.success(atk_data["final_output"])
-                        else:
-                            st.error(f"Attack test error: {atk_res.text}")
+                        st.markdown("**Shielded Production Output (Delivered):**")
+                        st.success(atk_data["final_output"])
                     except Exception as e:
                         st.error(f"Failed to execute attack test: {e}")
             else:
@@ -524,28 +575,18 @@ with tab_benchmark:
     if run_batch_btn:
         with st.spinner("Running 10 benchmark evaluations against NLI critic..."):
             try:
-                batch_res = httpx.get(
-                    f"{backend_url}/api/batch-test",
-                    params={
-                        "api_key": api_key_input if api_key_input else None,
-                        "strictness_cutoff": strictness_cutoff
-                    },
-                    timeout=90.0
-                )
+                b_data = dispatch_batch_test(api_key_input, strictness_cutoff, backend_url)
                 
-                if batch_res.status_code == 200:
-                    b_data = batch_res.json()
-                    
-                    # Benchmark metrics
-                    b_col1, b_col2, b_col3, b_col4 = st.columns(4)
-                    with b_col1:
-                        st.metric("Total Test Cases", b_data["total_tests"])
-                    with b_col2:
-                        st.metric("Passed Cases", b_data["passed_tests"])
-                    with b_col3:
-                        st.metric("Guardrail Precision", f"{b_data['pass_rate_percentage']:.1f}%")
-                    with b_col4:
-                        st.metric("Avg Latency", f"{b_data['average_latency_ms']:.1f} ms")
+                # Benchmark metrics
+                b_col1, b_col2, b_col3, b_col4 = st.columns(4)
+                with b_col1:
+                    st.metric("Total Test Cases", b_data["total_tests"])
+                with b_col2:
+                    st.metric("Passed Cases", b_data["passed_tests"])
+                with b_col3:
+                    st.metric("Guardrail Precision", f"{b_data['pass_rate_percentage']:.1f}%")
+                with b_col4:
+                    st.metric("Avg Latency", f"{b_data['average_latency_ms']:.1f} ms")
 
                     st.markdown("---")
                     st.markdown("### 📋 Case-by-Case Benchmark Audit Results")
